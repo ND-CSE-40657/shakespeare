@@ -23,6 +23,8 @@ class FST(object):
         self.transitions_on = collections.defaultdict(lambda: collections.defaultdict(float))
         self.start = None
         self.accept = None
+        self.input_alphabet = set()
+        self.output_alphabet = set()
 
     def add_state(self, q):
         """Adds state q."""
@@ -47,12 +49,15 @@ class FST(object):
         If t is already a transition, its weight is incremented by wt."""
         self.add_state(t.q)
         self.add_state(t.r)
+        self.input_alphabet.add(t.a[0])
+        self.output_alphabet.add(t.a[1])
         self.transitions_from[t.q][t] += wt
         self.transitions_to[t.r][t] += wt
         self.transitions_on[t.a[0]][t] += wt
 
     def reweight_transition(self, t, wt=1):
         """Replaces the weight of transition t with new weight wt."""
+        # To do: eliminate this in favor of a separate self.weight[t]
         self.transitions_from[t.q][t] = wt
         self.transitions_to[t.r][t] = wt
         self.transitions_on[t.a[0]][t] = wt
@@ -60,6 +65,7 @@ class FST(object):
     def train_joint(self, data):
         """Trains the transducer on the given data."""
         c = collections.Counter()
+        alphabet = set()
         for line in data:
             q = self.start
             for a in list(line) + [STOP]:
@@ -74,6 +80,35 @@ class FST(object):
             z = sum(self.transitions_from[q].values())
             for t in self.transitions_from[q]:
                 self.reweight_transition(t, c[t]/z)
+
+    def normalize_joint(self):
+        """Renormalizes weights so that path weights form a joint
+        probability distribution (input and output)."""
+        for q in self.states:
+            s = collections.Counter()
+            z = 0
+            for t, wt in self.transitions_from[q].items():
+                s[t.a[0]] += wt
+                z += wt
+            for t, wt in self.transitions_from[q].items():
+                if wt == 0: continue
+                self.reweight_transition(t, wt/z)
+
+    def normalize_cond(self, add=0):
+        """Renormalizes weights so that path weights form a conditional
+        probability distribution (output given input)."""
+        for q in self.states:
+            s = collections.Counter()
+            z = 0
+            for t, wt in self.transitions_from[q].items():
+                s[t.a[0]] += wt+add
+                z += wt+add
+            for t, wt in self.transitions_from[q].items():
+                if wt+add == 0: continue
+                if t.a[0] == EPSILON:
+                    self.reweight_transition(t, (wt+add)/z)
+                else:
+                    self.reweight_transition(t, (wt+add)/s[t.a[0]]*(1-s[EPSILON]/z))
 
     def visualize(self):
         """Pops up a window showing a transition diagram.
@@ -113,7 +148,6 @@ class FST(object):
                 dot.append('{}->{}[label={},fontname=Courier];'.format(index[q], index[r], escape(label)))
         dot.append("}")
         dot = "\n".join(dot)
-        print(dot)
         proc = subprocess.run(["dot", "-T", "gif"], input=dot.encode("utf8"), stdout=subprocess.PIPE)
         if proc.returncode == 0:
             root = Tk()
@@ -184,6 +218,7 @@ def make_ngram(data, n):
     list of lists of symbols."""
     m = FST()
     m.set_start(("<s>",) * (n-1))
+    data = list(data)
     for line in data:
         q = m.start
         for a in line:
@@ -192,4 +227,5 @@ def make_ngram(data, n):
             q = q_next
         m.add_transition(Transition(q, (STOP, STOP), STOP))
     m.set_accept(STOP)
+    m.train_joint(data)
     return m
