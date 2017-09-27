@@ -1,10 +1,21 @@
 import collections
 import math
 
-EPSILON="ε"
-STOP="</s>"
+EPSILON="ε" # Special symbol that is treated as the empty string
+STOP="</s>" # Special symbol that occurs at the end of every string
 
 class Transition(object):
+    """A transition of a FST.
+
+    q: The state that the transition goes from. It can be any kind of
+       object as long as it's hashable.
+
+    a: The symbol of the transition. For an FST, this should be a pair
+       of strings.
+
+    r: The state that the transition goes to.
+    """
+    
     def __init__(self, q, a, r):
         self.q, self.a, self.r = q, a, r
     def __eq__(self, other):
@@ -16,6 +27,8 @@ class Transition(object):
         return hash((self.q, self.a, self.r))
 
 class FST(object):
+    """A finite state transducer."""
+    
     def __init__(self):
         self.states = set()
         self.transitions_from = collections.defaultdict(lambda: collections.defaultdict(float))
@@ -47,6 +60,7 @@ class FST(object):
         
         If q and r are not already states, they are added too.
         If t is already a transition, its weight is incremented by wt."""
+        
         self.add_state(t.q)
         self.add_state(t.r)
         self.input_alphabet.add(t.a[0])
