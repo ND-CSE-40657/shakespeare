@@ -1,5 +1,5 @@
 # This version does not require GraphViz to have GIF support,
-# but it does depend on Pillow (do `pip3 install Pillow` to install).
+# but it does depend on PIL (which python3 on the student machines has).
 
 import collections
 import math
