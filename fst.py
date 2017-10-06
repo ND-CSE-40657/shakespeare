@@ -156,9 +156,9 @@ class FST(object):
                 ts[t.r].append(t)
             for r in ts:
                 if len(ts[r]) > 8:
-                    label = "\n".join(":".join(map(str, t.a)) for t in ts[r][:5]) + "\n..."
+                    label = "\\n".join(":".join(map(str, t.a)) for t in ts[r][:5]) + "\\n..."
                 else:
-                    label = "\n".join(":".join(map(str, t.a)) for t in ts[r])
+                    label = "\\n".join(":".join(map(str, t.a)) for t in ts[r])
                 dot.append('{}->{}[label={},fontname=Courier];'.format(index[q], index[r], escape(label)))
         dot.append("}")
         dot = "\n".join(dot)
