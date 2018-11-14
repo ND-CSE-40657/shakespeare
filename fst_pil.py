@@ -4,10 +4,21 @@
 import collections
 import math
 
-EPSILON="ε"
-STOP="</s>"
+EPSILON="ε" # Special symbol that is treated as the empty string
+STOP="</s>" # Special symbol that occurs at the end of every string
 
 class Transition(object):
+    """A transition of a FST.
+
+    q: The state that the transition goes from. It can be any kind of
+       object as long as it's hashable.
+
+    a: The symbol of the transition. For an FST, this should be a pair
+       of strings.
+
+    r: The state that the transition goes to.
+    """
+
     def __init__(self, q, a, r):
         self.q, self.a, self.r = q, a, r
     def __eq__(self, other):
@@ -19,11 +30,14 @@ class Transition(object):
         return hash((self.q, self.a, self.r))
 
 class FST(object):
+    """A finite state transducer."""
+    
     def __init__(self):
         self.states = set()
         self.transitions_from = collections.defaultdict(lambda: collections.defaultdict(float))
         self.transitions_to = collections.defaultdict(lambda: collections.defaultdict(float))
-        self.transitions_on = collections.defaultdict(lambda: collections.defaultdict(float))
+        self.transitions_on_input = collections.defaultdict(lambda: collections.defaultdict(float))
+        self.transitions_on_output = collections.defaultdict(lambda: collections.defaultdict(float))
         self.start = None
         self.accept = None
         self.input_alphabet = set()
@@ -56,14 +70,16 @@ class FST(object):
         self.output_alphabet.add(t.a[1])
         self.transitions_from[t.q][t] += wt
         self.transitions_to[t.r][t] += wt
-        self.transitions_on[t.a[0]][t] += wt
+        self.transitions_on_input[t.a[0]][t] += wt
+        self.transitions_on_output[t.a[1]][t] += wt
 
     def reweight_transition(self, t, wt=1):
         """Replaces the weight of transition t with new weight wt."""
         # To do: eliminate this in favor of a separate self.weight[t]
         self.transitions_from[t.q][t] = wt
         self.transitions_to[t.r][t] = wt
-        self.transitions_on[t.a[0]][t] = wt
+        self.transitions_on_input[t.a[0]][t] = wt
+        self.transitions_on_output[t.a[1]][t] = wt
 
     def train_joint(self, data):
         """Trains the transducer on the given data."""
@@ -172,7 +188,7 @@ class FST(object):
 
             root.mainloop()
         
-def compose(m1, m2):
+def compose_left(m1, m2):
     """Compose two finite transducers m1 and m2, feeding the output of m1
     into the input of m2.
 
@@ -193,10 +209,10 @@ def compose(m1, m2):
     m2_inserts = False
 
     m.set_start((m1.start, m2.start))
-    for a in m1.transitions_on:
-        for t1, wt1 in m1.transitions_on[a].items():
+    for a in m1.transitions_on_input:
+        for t1, wt1 in m1.transitions_on_input[a].items():
             if t1.a[1] != EPSILON:
-                for t2, wt2 in m2.transitions_on.get(t1.a[1], {}).items():
+                for t2, wt2 in m2.transitions_on_input.get(t1.a[1], {}).items():
                     t = Transition((t1.q, t2.q), (t1.a[0], t2.a[1]), (t1.r, t2.r))
                     t.composed_from = (t1, t2)
                     m.add_transition(t, wt=wt1*wt2)
@@ -207,7 +223,7 @@ def compose(m1, m2):
                     t.composed_from = (t1, None)
                     m.add_transition(t, wt=wt1)
     for q1 in m1.states:
-        for t2, wt2 in m2.transitions_on.get(EPSILON, {}).items():
+        for t2, wt2 in m2.transitions_on_input.get(EPSILON, {}).items():
             m2_inserts = True
             t = Transition((q1, t2.q), (EPSILON, t2.a[1]), (q1, t2.r))
             t.composed_from = (None, t2)
@@ -216,6 +232,40 @@ def compose(m1, m2):
     if m1_deletes and m2_inserts:
         raise ValueError("Can't compose a deleting FST with an inserting FST")
     return m
+
+def compose_right(m1, m2):
+    """Same as compose, but assumes that m2 is smaller (which can make 
+    composition significantly faster)."""
+    m = FST()
+    m1_deletes = False
+    m2_inserts = False
+
+    m.set_start((m1.start, m2.start))
+    for b in m2.transitions_on_output:
+        for t2, wt2 in m2.transitions_on_output[b].items():
+            if t2.a[0] != EPSILON:
+                for t1, wt1 in m1.transitions_on_output.get(t2.a[0], {}).items():
+                    t = Transition((t1.q, t2.q), (t1.a[0], t2.a[1]), (t1.r, t2.r))
+                    t.composed_from = (t1, t2)
+                    m.add_transition(t, wt=wt1*wt2)
+            else:
+                m2_inserts = True
+                for q1 in m1.states:
+                    t = Transition((q1, t2.q), (EPSILON, t2.a[1]), (q1, t2.r))
+                    t.composed_from = (None, t2)
+                    m.add_transition(t, wt=wt2)
+    for q2 in m2.states:
+        for t1, wt1 in m1.transitions_on_output.get(EPSILON, {}).items():
+            m1_deletes = True
+            t = Transition((t1.q, q2), (t1.a[0], EPSILON), (t1.r, q2))
+            t.composed_from = (t1, None)
+            m.add_transition(t, wt=wt1)
+    m.set_accept((m1.accept, m2.accept))
+    if m1_deletes and m2_inserts:
+        raise ValueError("Can't compose a deleting FST with an inserting FST")
+    return m
+
+compose = compose_left
 
 def make_ngram(data, n):
     """Create an n-gram language model from data. The data should be a
