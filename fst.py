@@ -1,282 +1,317 @@
 import collections
+import collections.abc
 import math
 
 EPSILON="ε" # Special symbol that is treated as the empty string
 STOP="</s>" # Special symbol that occurs at the end of every string
 
-class Transition(object):
+def logaddexp(lx, ly):
+    """Compute log(exp(lx)+exp(ly)) in a numerically stable way."""
+    if lx < ly: lx, ly = ly, lx
+    return lx + math.log1p(math.exp(ly-lx))
+
+class Transition(collections.namedtuple('Transition', 'q a b r')):
     """A transition of a FST.
-
-    q: The state that the transition goes from. It can be any kind of
-       object as long as it's hashable.
-
-    a: The symbol of the transition. For an FST, this should be a pair
-       of strings.
-
-    r: The state that the transition goes to.
-    """
     
-    def __init__(self, q, a, r):
-        self.q, self.a, self.r = q, a, r
-    def __eq__(self, other):
-        return (isinstance(other, Transition) and
-                (self.q, self.a, self.r) == (other.q, other.a, other.r))
-    def __ne__(self, other):
-        return not self == other
-    def __hash__(self):
-        return hash((self.q, self.a, self.r))
+              a:b
+           q -----> r
+
+    `q`: The state that the transition goes from. It can be any kind of
+       object, as long as it's hashable.
+    `a`: The input symbol.
+    `b`: The output symbol.
+    `r`: The state that the transition goes to.
+
+    Transitions are hashable and can be compared using `==` and `!=`.
+
+    You can add whatever other attributes you want, but they will not
+    be used when hashing or comparing.
+    """
 
 class FST(object):
     """A finite state transducer."""
     
     def __init__(self):
+        defaultdict = collections.defaultdict
         self.states = set()
-        self.transitions_from = collections.defaultdict(lambda: collections.defaultdict(float))
-        self.transitions_to = collections.defaultdict(lambda: collections.defaultdict(float))
-        self.transitions_on_input = collections.defaultdict(lambda: collections.defaultdict(float))
-        self.transitions_on_output = collections.defaultdict(lambda: collections.defaultdict(float))
+        self.transitions = defaultdict(lambda: defaultdict(set))
+        self.transitions_inverse = defaultdict(lambda: defaultdict(set))
         self.start = None
         self.accept = None
         self.input_alphabet = set()
         self.output_alphabet = set()
+        self.counts = collections.Counter()
 
     def add_state(self, q):
         """Adds state q."""
         self.states.add(q)
 
     def set_start(self, q):
-        """Sets the start state to q."""
+        """Sets the start state to q. If it's not already a state, it is added
+        automatically."""
         self.add_state(q)
         self.start = q
 
+    def get_start(self):
+        """Returns the start state."""
+        return self.start
+
     def set_accept(self, q):
-        """Sets the accept state to q."""
+        """Sets the accept state to q. If it's not already a state, it is added
+        automatically."""
         self.add_state(q)
         self.accept = q
 
-    def add_transition(self, t, wt=1):
-        """Adds the transition 
-             a:b/wt
-           q ------> r
+    def get_accept(self):
+        """Returns the accept state."""
+        return self.accept
+
+    def add_transition(self, t, count=1):
+        """Adds transition `t` to FST `self`.
         
-        If q and r are not already states, they are added too.
-        If t is already a transition, its weight is incremented by wt."""
-        
-        self.add_state(t.q)
-        self.add_state(t.r)
-        self.input_alphabet.add(t.a[0])
-        self.output_alphabet.add(t.a[1])
-        self.transitions_from[t.q][t] += wt
-        self.transitions_to[t.r][t] += wt
-        self.transitions_on_input[t.a[0]][t] += wt
-        self.transitions_on_output[t.a[1]][t] += wt
+        If `t.q` and `t.r` are not already states, they are added
+        automatically.
 
-    def reweight_transition(self, t, wt=1):
-        """Replaces the weight of transition t with new weight wt."""
-        # To do: eliminate this in favor of a separate self.weight[t]
-        self.transitions_from[t.q][t] = wt
-        self.transitions_to[t.r][t] = wt
-        self.transitions_on_input[t.a[0]][t] = wt
-        self.transitions_on_output[t.a[1]][t] = wt
+        Increments the count of `t` by `count` (default 1).
+        """
 
-    def train_joint(self, data):
-        """Trains the transducer on the given data."""
-        c = collections.Counter()
-        alphabet = set()
-        for line in data:
-            q = self.start
-            for a in list(line) + [STOP]:
-                for t in self.transitions_from[q]:
-                    if a == t.a[0]:
-                        c[t] += 1
-                        q = t.r
-                        break
-                else:
-                    raise ValueError("training string is not in language")
-        for q in self.states:
-            z = sum(self.transitions_from[q].values())
-            for t in self.transitions_from[q]:
-                self.reweight_transition(t, c[t]/z)
+        if t not in self.counts:
+            self.add_state(t.q)
+            self.add_state(t.r)
+            self.input_alphabet.add(t.a)
+            self.output_alphabet.add(t.b)
+            self.transitions[t.q][t.a].add(t)
+            self.transitions_inverse[t.q][t.b].add(t)
+        self.counts[t] += count
 
-    def normalize_joint(self):
-        """Renormalizes weights so that path weights form a joint
-        probability distribution (input and output)."""
-        for q in self.states:
-            s = collections.Counter()
-            z = 0
-            for t, wt in self.transitions_from[q].items():
-                s[t.a[0]] += wt
-                z += wt
-            for t, wt in self.transitions_from[q].items():
-                if wt == 0: continue
-                self.reweight_transition(t, wt/z)
+    def get_transitions(self, q, a):
+        """Returns the set of transitions from state `q` on input `a`."""
+        return self.transitions[q][a]
 
-    def normalize_cond(self, add=0):
-        """Renormalizes weights so that path weights form a conditional
-        probability distribution (output given input)."""
-        for q in self.states:
-            s = collections.Counter()
-            z = 0
-            for t, wt in self.transitions_from[q].items():
-                s[t.a[0]] += wt+add
-                z += wt+add
-            for t, wt in self.transitions_from[q].items():
-                if wt+add == 0: continue
-                if t.a[0] == EPSILON:
-                    self.reweight_transition(t, (wt+add)/z)
-                else:
-                    self.reweight_transition(t, (wt+add)/s[t.a[0]]*(1-s[EPSILON]/z))
-
-    def visualize(self):
-        """Pops up a window showing a transition diagram.
-
-        Requires graphviz.
-        Under MacOS Sierra, you'll need to upgrade to 10.12.2 or newer."""
-        
+    def _ipython_display_(self):
+        """Draw transition diagram as SVG for display in a Jupyter notebook."""
+        import IPython.display
         import subprocess
-        from tkinter import (Tk, Canvas, PhotoImage,
-                             Scrollbar, HORIZONTAL, VERTICAL, X, Y,
-                             BOTTOM, RIGHT, LEFT, YES, BOTH, ALL)
-        import base64
+        import html
 
-        def escape(s):
-            return '"{}"'.format(s.replace('\\', '\\\\').replace('"', '\\"'))
-        
-        dot = []
-        dot.append("digraph {")
-        dot.append('START[label="",shape=none];')
+        dot = ['digraph {',
+               '  rankdir=LR;',
+               '  node [fontname=Courier,fontsize=10];',
+               '  node [shape=box,style=rounded];',
+               '  node [height=0,width=0,margin="0.055,0.042"];',
+               '  edge [arrowhead=vee,arrowsize=0.5];',
+               '  edge [fontname=Courier,fontsize=9];',
+               '  START [label="",shape=none];']
         index = {}
         for i, q in enumerate(self.states):
             index[q] = i
-            attrs = {'label': escape(str(q)), 'fontname': 'Courier'}
+            attrs = 'label=<{}>'.format(html.escape(str(q)))
             if q == self.accept:
-                attrs['peripheries'] = 2
-            dot.append('{} [{}];'.format(i, ",".join("{}={}".format(k, v) for (k, v) in attrs.items())))
-        dot.append("START->{};".format(index[self.start]))
+                attrs += ',peripheries=2'
+            dot.append('  {} [{}];'.format(i, attrs))
+        dot.append('  START->{};'.format(index[self.start]))
         for q in self.states:
             ts = collections.defaultdict(list)
-            for t in self.transitions_from.get(q, []):
-                ts[t.r].append(t)
+            for a in self.transitions.get(q, {}):
+                for t in self.transitions[q].get(a, []):
+                    ts[t.r].append(t)
             for r in ts:
-                if len(ts[r]) > 8:
-                    label = "\\n".join(":".join(map(str, t.a)) for t in ts[r][:5]) + "\\n..."
-                else:
-                    label = "\\n".join(":".join(map(str, t.a)) for t in ts[r])
-                dot.append('{}->{}[label={},fontname=Courier];'.format(index[q], index[r], escape(label)))
-        dot.append("}")
-        dot = "\n".join(dot)
-        proc = subprocess.run(["dot", "-T", "gif"], input=dot.encode("utf8"), stdout=subprocess.PIPE)
-        if proc.returncode == 0:
-            root = Tk()
-            scrollx = Scrollbar(root, orient=HORIZONTAL)
-            scrollx.pack(side=BOTTOM, fill=X)
-            scrolly = Scrollbar(root, orient=VERTICAL)
-            scrolly.pack(side=RIGHT, fill=Y)
+                label = ['<table border="0" cellpadding="1">']
+                for i, t in enumerate(ts[r]):
+                    if i >= 3:
+                        label.append('<tr><td>...</td></tr>')
+                        break
+                    l = '{}:{}'.format(t.a, t.b)
+                    label.append('<tr><td>{}</td></tr>'.format(html.escape(l)))
+                label.append('</table>')
+                dot.append('  {}->{}[label=<{}>];'.format(index[q],
+                                                          index[r],
+                                                          ''.join(label)))
+        dot.append('}')
+        dot = '\n'.join(dot)
+        proc = subprocess.run(['dot', '-T', 'svg'],
+                              input=dot.encode('utf8'),
+                              capture_output=True,
+                              check=True)
+        IPython.display.display(IPython.display.SVG(proc.stdout))
 
-            canvas = Canvas(root)
-            image = PhotoImage(data=base64.b64encode(proc.stdout))
-            canvas.create_image(0, 0, image=image, anchor="nw")
-            canvas.pack(side=LEFT, expand=YES, fill=BOTH)
-            
-            canvas.config(xscrollcommand=scrollx.set, yscrollcommand=scrolly.set)
-            canvas.config(scrollregion=canvas.bbox(ALL))
-            scrollx.config(command=canvas.xview)
-            scrolly.config(command=canvas.yview)
+def string(w):
+    """Returns a FST that accepts the language {w} and maps w to itself."""
+    m = FST()
+    m.set_start(0)
+    for i, a in enumerate(w):
+        t = Transition(i, a, a, i+1)
+        m.add_transition(t)
+    t = Transition(len(w), STOP, STOP, len(w)+1)
+    m.add_transition(t)
+    m.set_accept(len(w)+1)
+    return m
 
-            root.mainloop()
+def estimate_joint(counts, add=0):
+    """Computes joint probabilities P(a, b | q)."""
+    probs = {}
+    z = collections.Counter()
+    for t in counts:
+        z[t.q] += counts[t]+add
+    for t in counts:
+        probs[t] = (counts[t]+add)/z[t.q]
+    return probs
 
-def compose_left(m1, m2):
-    """Compose two finite transducers m1 and m2, feeding the output of m1
-    into the input of m2.
+def estimate_cond(counts, add=0):
+    """Computes conditional probabilities P(b | q, a).
 
-    In the resulting transducer, each transition t contains extra
-    information about where it came from in the attribute
-    t.composed_from:
+    Unlike the definition in the class notes, this does allow a
+    state to have outgoing epsilon and non-epsilon transitions.
+    """
+    probs = {}
+    s = collections.Counter()
+    z = collections.Counter()
+    for t in counts:
+        wt = counts[t]+add
+        s[t.q,t.a] += wt
+        z[t.q] += wt
+    for t in counts:
+        wt = counts[t]+add
+        if t.a == EPSILON:
+            probs[t] = wt/z[t.q]
+        else:
+            probs[t] = wt/s[t.q,t.a]*(1-s[t.q,EPSILON]/z[t.q])
+    return probs
 
-    - (t1, t2) means that t simulates m1 following transition t1 and
-      m2 following transition t2.
-    - (t1, None) means that t simulates m1 following transition t1 and
-      m2 doing nothing.
-    - (None, t2) means that t simulates m1 doing nothing and m2
-      following transition t2.
+class dynamic_values(collections.abc.Mapping):
+    """A dict-like object such that `dynamic_values(f)[t] == f(t)`."""
+    def __init__(self, f):
+        self.f = f
+    def __getitem__(self, t):
+        return self.f(t)
+    def __iter__(self): raise NotImplementedError()
+    def __len__(self): raise NotImplementedError()
+    
+class ComposedFST(FST):
+    def compose_values(self, v1, v2, op='*'):
+        """Return a dict-like object that computes values on-the-fly from
+        values (`v1` and `v2`) of the two component FSTs.
+        
+        `op`: either `"*"` or `"+"` indicating whether values should be
+        multiplied or added."""
+        return compose_values(self, v1, v2, op)
+
+class compose_values(collections.abc.Mapping):
+    def __init__(self, m, v1, v2, op='*'):
+        self.m = m
+        self.v1 = v1
+        self.v2 = v2
+        self.op = op
+
+    def __getitem__(self, t):
+        if self.op == '*':
+            v = 0.
+            for (t1, t2) in self.m.composed_from[t]:
+                dv = 1.
+                if t1 is not None: dv *= self.v1[t1]
+                if t2 is not None: dv *= self.v2[t2]
+                v += dv
+        elif self.op == '+':
+            v = float('-inf')
+            for (t1, t2) in self.m.composed_from[t]:
+                dv = 0.
+                if t1 is not None: dv += self.v1[t1]
+                if t2 is not None: dv += self.v2[t2]
+                v = logaddexp(v, dv)
+        return v
+
+    def __iter__(self): raise NotImplementedError()
+    def __len__(self): raise NotImplementedError()
+
+def compose(m1, m2):
+    """Compose two finite transducers `m1` and `m2`, feeding the output of `m1`
+    into the input of `m2`.
+
+    In the resulting transducer `m`, for each transition `t`,
+    `m.composed_from[t]` contains extra information about where `t`
+    came from:
+
+    - `(t1, t2)` means that `t` simulates `m1` following transition `t1` and
+      `m2` following transition `t2`.
+    - `(t1, None)` means that `t` simulates `m1` following transition `t1` and
+      `m2` doing nothing.
+    - `(None, t2)` means that `t` simulates m1 doing nothing and `m2`
+      following transition `t2`.
+
+    Instead of working with `m.composed_from` directly, it may be
+    easier to use `m.compose_values`.
     """
     
-    m = FST()
-    m1_deletes = False
-    m2_inserts = False
-
+    m = ComposedFST()
+    m.composed_from = collections.defaultdict(list)
     m.set_start((m1.start, m2.start))
-    for a in m1.transitions_on_input:
-        for t1, wt1 in m1.transitions_on_input[a].items():
-            if t1.a[1] != EPSILON:
-                for t2, wt2 in m2.transitions_on_input.get(t1.a[1], {}).items():
-                    t = Transition((t1.q, t2.q), (t1.a[0], t2.a[1]), (t1.r, t2.r))
-                    t.composed_from = (t1, t2)
-                    m.add_transition(t, wt=wt1*wt2)
-            else:
-                m1_deletes = True
-                for q2 in m2.states:
-                    t = Transition((t1.q, q2), (t1.a[0], EPSILON), (t1.r, q2))
-                    t.composed_from = (t1, None)
-                    m.add_transition(t, wt=wt1)
-    for q1 in m1.states:
-        for t2, wt2 in m2.transitions_on_input.get(EPSILON, {}).items():
-            m2_inserts = True
-            t = Transition((q1, t2.q), (EPSILON, t2.a[1]), (q1, t2.r))
-            t.composed_from = (None, t2)
-            m.add_transition(t, wt=wt2)
-    m.set_accept((m1.accept, m2.accept))
-    if m1_deletes and m2_inserts:
-        raise ValueError("Can't compose a deleting FST with an inserting FST")
-    return m
 
-def compose_right(m1, m2):
-    """Same as compose, but assumes that m2 is smaller (which can make 
-    composition significantly faster)."""
-    m = FST()
-    m1_deletes = False
-    m2_inserts = False
+    m1_deletes = m2_inserts = False
 
-    m.set_start((m1.start, m2.start))
-    for b in m2.transitions_on_output:
-        for t2, wt2 in m2.transitions_on_output[b].items():
-            if t2.a[0] != EPSILON:
-                for t1, wt1 in m1.transitions_on_output.get(t2.a[0], {}).items():
-                    t = Transition((t1.q, t2.q), (t1.a[0], t2.a[1]), (t1.r, t2.r))
-                    t.composed_from = (t1, t2)
-                    m.add_transition(t, wt=wt1*wt2)
-            else:
-                m2_inserts = True
-                for q1 in m1.states:
-                    t = Transition((q1, t2.q), (EPSILON, t2.a[1]), (q1, t2.r))
-                    t.composed_from = (None, t2)
-                    m.add_transition(t, wt=wt2)
-    for q2 in m2.states:
-        for t1, wt1 in m1.transitions_on_output.get(EPSILON, {}).items():
+    # Breadth-first search through the composed transducer
+    agenda = collections.deque([(m1.start, m2.start)])
+    index = set(agenda)
+
+    def add_transition(t, t1, t2):
+        m.add_transition(t)
+        m.composed_from[t].append((t1, t2))
+        r = t.r
+        if r not in index:
+            agenda.append(r)
+            index.add(r)
+
+    while len(agenda) > 0:
+        q1, q2 = q = agenda.popleft()
+        mtq1 = m1.transitions_inverse[q1]
+        mtq2 = m2.transitions[q2]
+        bs = min([mtq1, mtq2], key=len)
+        for b in bs:
+            if b == EPSILON: continue
+            mtq2b = mtq2.get(b, [])
+            for t1 in mtq1.get(b, []):
+                for t2 in mtq2b:
+                    t = Transition(q, t1.a, t2.b, (t1.r, t2.r))
+                    add_transition(t, t1, t2)
+            
+        for t in mtq1.get(EPSILON, []):
             m1_deletes = True
-            t = Transition((t1.q, q2), (t1.a[0], EPSILON), (t1.r, q2))
-            t.composed_from = (t1, None)
-            m.add_transition(t, wt=wt1)
+            t = Transition(q, t1.a, EPSILON, (t1.r, q2))
+            add_transition(t, t1, None)
+
+        for t in mtq2.get(EPSILON, []):
+            m2_inserts = True
+            t = Transition(q, EPSILON, t2.b, (q1, t2.r))
+            add_transition(t, None, t2)
+            
     m.set_accept((m1.accept, m2.accept))
+
     if m1_deletes and m2_inserts:
-        raise ValueError("Can't compose a deleting FST with an inserting FST")
+        raise NotImplementedError("I can't compose a deleting FST with an inserting FST")
+    
     return m
 
-compose = compose_left
+def topological_sort(m):
+    """Topologically sort the states of m. Returns a list `o` of states
+    such that if `i < j`, then there is no path from `o[j]` to `o[i]`.
+    If there is no such ordering, an exception is raised.
+    """
+    # https://en.wikipedia.org/wiki/Topological_sorting#Depth-first_search
+    order = []
+    visited = set()
+    path = set()
+    def visit(q):
+        if q in visited:
+            return
+        if q in path:
+            raise ValueError("m must be acyclic")
+        path.add(q)
+        for a, ts in m.transitions[q].items():
+            for t in ts:
+                visit(t.r)
+        path.remove(q)
+        visited.add(q)
+        order.append(q)
+    visit(m.start)
+    order.reverse()
+    return order
 
-def make_ngram(data, n):
-    """Create an n-gram language model from data. The data should be a
-    list of lists of symbols."""
-    m = FST()
-    m.set_start(("<s>",) * (n-1))
-    data = list(data)
-    for line in data:
-        q = m.start
-        for a in line:
-            q_next = q[1:] + (a,)
-            m.add_transition(Transition(q, (a, a), q_next))
-            q = q_next
-        m.add_transition(Transition(q, (STOP, STOP), STOP))
-    m.set_accept(STOP)
-    m.train_joint(data)
-    return m
