@@ -1,0 +1,64 @@
+@media only screen and (min-width:40.063em) { /* medium */
+  body {
+    margin: 50px 50px;
+  }
+}
+
+h1 small {
+  font-size: 50%;
+}
+
+.date {
+  color: #333333;
+  font-size: 0.7rem;
+}
+
+table.schedule td {
+  vertical-align: top;
+}
+
+img.pic {
+  width: 100%;
+  max-width: 180px;
+  display: block;
+  margin: 0 auto;
+}
+
+div.caption {
+  text-align: center;
+  font-size: smaller;
+  margin-bottom: 1rem;
+}
+
+div.footer {
+  text-align: center;
+  font-size: smaller;
+  padding: 1rem 0;
+  border-top: 2px solid #eeeeee;
+}
+
+pre {
+  background-color: #e6e6e6;
+  border: 1px solid #cacaca;
+  margin: 1rem 0;
+  padding: 0.125rem 0.3125rem 0.0625rem;
+}
+
+pre code {
+  border: none;
+  padding: 0;
+}
+
+.rubric { background: #993333; color: white; padding: 1px 2px; margin: 0 3px; font-size: 10px; vertical-align: super;}
+
+ol.alpha { list-style-type: lower-alpha; }
+ol.roman { list-style-type: lower-roman; }
+
+.ghosted { color: #999999; }
+
+td.unit { background: white; width: 6rem; }
+
+.corrected { color: #993333; }
+
+table.honorcode { font-size: 80%; }
+

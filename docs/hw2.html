@@ -1,0 +1,203 @@
+
+
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CSE 40657/60657: Natural Language Processing</title>
+    <link rel="stylesheet" href="css/foundation.min.css" />
+    <link rel="stylesheet" href="css/app.css" />
+    <link rel="stylesheet" href="css/nlp.css" />
+  </head>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {inlineMath: [['$','$']]}
+});
+</script>
+<script type="text/javascript"
+  src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+</script>
+
+  <body>
+
+<a name="top"></a>
+
+<div class="title-bar" data-responsive-toggle="menu" data-hide-for="medium">
+ <button class="menu-icon" type="button" data-toggle></button>
+  <div class="title-bar-title">Menu</div>
+</div>
+
+<div class="top-bar" id="menu">
+  <div class="top-bar-left">
+    <ul class="vertical medium-horizontal menu" data-responsive-menu="drilldown medium-dropdown">
+      <li>
+        <a href="index.html"> 
+          Main 
+        </a>
+        <ul class="menu vertical">
+	  	  <li><a href="index.html#schedule">Schedule</a></li>
+	  <li><a href="index.html#grading">Grading</a></li>
+	  <li><a href="index.html#policies">Policies</a></li>
+        </ul>
+      </li>
+      <li>
+        <a href="readings.html"> 
+          Readings 
+        </a>
+      </li>
+      <li>
+        <a href="homework.html"> 
+          <b>Homework</b> 
+        </a>
+        <ul class="menu vertical">
+	  <li><a href="hw1.html">Homework 1</a></li>
+	  <li><a href="hw2.html">Homework 2</a></li>
+	  <li><a href="hw3.html">Homework 3</a></li>
+	  <li><a href="hw4.html">Homework 4</a></li>
+	  <li><a href="hw5.html">Homework 5</a></li>
+        </ul>
+      </li>
+      <li>
+        <a href="project.html"> 
+          Project 
+        </a>
+        <ul class="menu vertical">
+	  <li><a href="project.html#idea">Idea</a></li>
+	  <li><a href="project.html#baseline">Baseline</a></li>
+	  <li><a href="project.html#presentation">Presentation</a></li>
+	  <li><a href="project.html#report">Report</a></li>
+        </ul>
+      </li>
+      <li>
+        <a href="#">Links</a>
+        <ul class="menu vertical">
+	  <li><a href="https://campuswire.com/c/G5E91FFA1">Campuswire</a></li>
+	  <li><a href="https://sakailogin.nd.edu/portal/site/FA18-CSE-40657-CX-01">Sakai</a></li>
+	</ul>
+      </li>
+    </ul>
+  </div>
+</div>
+
+
+<div class="row">
+<div class="large-12 columns">
+<h1> <small>CSE 40657/60657</small> <br> Homework 2</h1>
+
+</div>
+</div>
+
+<div class="row">
+<div class="medium-4 columns">
+<dl class="info">
+<dt>Due</dt> <dd>2019/10/04</span> at 5pm</dd>
+<dt>Points</dt> <dd>30</dd>
+</dl>
+</div>
+
+<p>When processing text in languages without standardized spelling rules, or historical texts that followed rules that are no longer considered standard, spelling normalization is a necessary first step. In this assignment, you will build a model that learns how to convert Shakespeare's original English spelling to modern English spelling.</p>
+</div>
+</div>
+
+<div class="row">
+<div class="large-12 columns">
+
+<h2>Setup</h2>
+
+<p>Clone the <a href="https://github.com/ND-CSE-40657/hw2">Homework 2 repository</a>. It contains the following files:
+<table>
+<tr><td><code>fst.py</code></td> <td>Module for finite transducers</td></tr>
+<tr><td><code>cer.py</code></td> <td>Module for evaluation</td></tr>
+<tr><td><code>train.old</code></td> <td>Training data in original spelling</td></tr>
+<tr><td><code>train.new</code></td> <td>Training data in modern spelling</td></tr>
+<tr><td><code>test.old</code></td> <td>Test data in original spelling</td></tr>
+<tr><td><code>test.new</code></td> <td>Test data in modern spelling</td></tr>
+</table>
+
+<p>The data is the <a href="http://internetshakespeare.uvic.ca/Library/Texts/Ham/">text of <i>Hamlet</i></a> from Shakespeare's <a href="http://shakespeare.nd.edu/first-folio/">First Folio</a> in original and modern English spelling. The training data is everything up to where Hamlet dies (spoiler alert) and the test data is the last 50 or so lines afterwards.</p>
+
+<p>The <code>fst</code> module should be extremely helpful for this assignment. If you're writing in a language other than Python, please talk to the instructor about getting equivalent help in your programming language.</p>
+
+<p>In the following, point values are written after each requirement, like this.<span class="rubric">30</span></p>
+
+<h2>1. Building blocks</h2>
+<ol class="alpha">
+<li>Construct a weighted FST $M_{\text{LM}}$ for a bigram language model for modern English and train it on <code>train.new</code>.<span class="rubric">1</span> Feel free to reuse code from HW1, or someone else's code or the official solution's code, as long as you cite it. <span class="corrected">Smoothing shouldn't be necessary.</span></li>
+<li>Write code to construct an unweighted FST $M_{\text{TM}}$ that transforms strings over the modern alphabet into strings over the original alphabet.<span class="rubric">5</span> It should allow substitutions, insertions, and at most one deletion as discussed in class. You can view your FST in a Jupyter notebook and check that it looks something like this (shown here for a two-letter alphabet):
+<img style="display:block; margin: 0 auto; width: 180px" src="images/hw2-tm.png">
+Yours should be able to input any character found in <code>train.new</code> and output any character found in <code>train.old</code>.
+</li>
+<li>Write code that takes a string $w$ and creates an unweighted FST $M_w$ that inputs just $w \texttt{&lt;/s>}$ and outputs just $w \texttt{&lt;/s>}$.<span class="rubric">1</span> Again, you can view your FST in a Jupyter notebook to check it. <span class="corrected">(The function <code>fst.string</code> pretty much does htis for you.)</span></li>
+</ol>
+
+<h2>2. Decoding</h2>
+
+<ol class="alpha">
+<li>Initialize the probabilities of $M_{\text{TM}}$. Since we know that most letters in original spelling stay the same in modern spelling, give transitions on $a:a$ more probability (like 100 times more); this makes it easier to know if your decoder is working. To ensure that probabilities correctly sum to one, you can set the transition counts to whatever you want, and then use <code>fst.estimate_cond()</code> to compute probabilities from them. Briefly describe your initialization.<span class="rubric">1</span></li>
+<li>For each original line $w$ in the test set, use <code>fst.compose()</code> to compose $M_{\text{LM}}$, $M_{\text{TM}}$, and $M_w$.<span class="rubric">1</span>
+<li>Implement the Viterbi algorithm to find the best path through this FST.<span class="rubric">5</span> Be sure to visit the states in the correct order. We provide a function <code>fst.topological_sort</code> to give you a correct ordering. <span class="corrected">The notes (page 36) have been updated with a slight variant of the algorithm that is better suited to our data structures.</span></li>
+<li>Run your Viterbi algorithm on <code>test.old</code>. For the first ten lines, report the best modernization together with its log-probability:
+<pre>
+[Horatio] Now cracke a Noble heart.     -108.6678162110888
+Good ight sweet Prince,                 -85.19153221166528
+</pre>
+and so on.<span class="rubric">1</span></li>
+<li>Use the <code>cer</code> module to evaluate how well your modernizer works. You can either call <code>cer.cer()</code> directly as a function, or run <code>cer.py test.new youroutput.new</code> where <code>youroutput.new</code> is a file containing your outputs. (Don't forget to remove the log-probabilities.) Report your score.<span class="rubric">1</span> A lower score is better; if you initialize the model well, you should get a score under 10%.<span class="rubric">1</span></li>
+</p>
+</li>
+</ol>
+
+<h2>3. Training (CSE 40657/60657 only)</h2>
+<p>This part is optional for CDT 40310 students, who automatically get full credit.</p>
+
+<p>Now, we'll improve our modernizer by training the model using hard EM. We'll train on parallel text rather than on nonparallel text as in class; it's faster this way and gives better results.</p>
+<ol class="alpha">
+<li>Implement the E step: For each line in the training data, consisting of a modern string $m$ and an original string $e$,
+<ul>
+<li>Compose $M_m$, $M_{\text{TM}}$, and $M_e$.<span class="rubric">1</span> Note that this is different from Part 2.</li>
+<li>Use the Viterbi algorithm to find the best path through the composed transducer.<span class="rubric">1</span></li>
+<li>Now count how many times each transition of $M_{\text{TM}}$ was used in that best path.<span class="rubric">4</span> That is, every transition in the composed transducer is made from (possibly) a transition of $M_m$, a transition of $M_{\text{TM}}$, and (possibly) a transition of $M_e$. For each transition <code>t</code> of $M_{\text{TM}}$, how many times does the best path use a transition that is made from <code>t</code>? Note that <code>fst.compose</code> keeps track of which transitions are made from which: when you do <code>m = fst.compose(m1, m2)</code>, for each transition <code>t</code> created, <code>m.composed_from[t]</code> is the pair of transitions that <code>t</code> was made from.</li>
+<li>Accumulate those counts over all the lines in the training data.<span class="rubric">1</span></li>
+</ul>
+<li>Implement the (rest of the) M step: Renormalize the counts collected above to reestimate the transition probabilities of $M_{\text{TM}}$.<span class="rubric">1</span> It's pretty important to apply some add-$\delta$ smoothing at this point. The method <code>FST.normalize_cond()</code> takes an optional parameter <code>add</code> that lets you do this.</li>
+<li>Repeat the above steps for a few iterations. After each iteration,
+<ul>
+<li>Decode <code>test.old</code> and measure your score against <code>test.new</code>. Report your score.<span class="rubric">1</span> It should eventually get better than 7.5%.<span class="rubric">1</span></li>
+<li>Print your outputs for the first ten lines.<span class="rubric">1</span></li>
+<li>Print the probabilities of all transition weights greater than or equal to 0.1.<span class="rubric">1</span></li>
+</ul>
+<li>Briefly describe what you saw your model learn.<span class="rubric">1</span></li>
+</ol>
+
+
+
+<h2>Submission</h2>
+
+<p>Please submit all of the following in a gzipped tar archive (.tar.gz or .tgz; not .zip or .rar) via Sakai:
+<ul>
+<li>A PDF file (not .doc or .docx) with your responses to the instructions/questions above.</li>
+<li>All of the code that you wrote.</li>
+<li>A README file with instructions on how to build and run your code on <code>student*.cse.nd.edu</code>. If this is not possible, please discuss with the instructor before submitting.</li>
+</ul>
+</p>
+
+</div>
+</div>
+
+<div class="footer">
+&copy; 2015&ndash;2019 David Chiang. Unless otherwise indicated, all materials are licensed under a <a href="https://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</p>
+</div>
+
+<script src="js/vendor/jquery.min.js"></script>
+<script src="js/vendor/what-input.min.js"></script>
+<script src="js/foundation.min.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>
+
+
