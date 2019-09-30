@@ -28,14 +28,18 @@ class Transition(collections.namedtuple('Transition', 'q a b r')):
     be used when hashing or comparing.
     """
 
+def _lambda_defaultdict_set():
+    """Lift lambda: defaultdict(set) to global scope to enable pickling."""
+    return defaultdict(set)
+    
 class FST(object):
     """A finite state transducer."""
     
     def __init__(self):
         defaultdict = collections.defaultdict
         self.states = set()
-        self.transitions = defaultdict(lambda: defaultdict(set))
-        self.transitions_inverse = defaultdict(lambda: defaultdict(set))
+        self.transitions = defaultdict(_lambda_defaultdict_set)
+        self.transitions_inverse = defaultdict(_lambda_defaultdict_set)
         self.start = None
         self.accept = None
         self.input_alphabet = set()
