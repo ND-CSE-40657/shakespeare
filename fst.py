@@ -1,5 +1,6 @@
 import collections
 import collections.abc
+from collections import defaultdict
 import math
 
 EPSILON="ε" # Special symbol that is treated as the empty string
