@@ -273,12 +273,12 @@ def compose(m1, m2):
                     t = Transition(q, t1.a, t2.b, (t1.r, t2.r))
                     add_transition(t, t1, t2)
             
-        for t in mtq1.get(EPSILON, []):
-            m1_deletes = True
+        for t1 in mtq1.get(EPSILON, []):
+            m1_Deletes = True
             t = Transition(q, t1.a, EPSILON, (t1.r, q2))
             add_transition(t, t1, None)
 
-        for t in mtq2.get(EPSILON, []):
+        for t2 in mtq2.get(EPSILON, []):
             m2_inserts = True
             t = Transition(q, EPSILON, t2.b, (q1, t2.r))
             add_transition(t, None, t2)
@@ -315,3 +315,4 @@ def topological_sort(m):
     order.reverse()
     return order
 
+    
