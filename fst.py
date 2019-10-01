@@ -30,7 +30,7 @@ class Transition(collections.namedtuple('Transition', 'q a b r')):
 
 def _lambda_defaultdict_set():
     """Lift lambda: defaultdict(set) to global scope to enable pickling."""
-    return defaultdict(set)
+    return collections.defaultdict(set)
     
 class FST(object):
     """A finite state transducer."""
